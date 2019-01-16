@@ -15,15 +15,27 @@ const toCss = style =>
     "\n"
   ].join("");
 
-let isStylesReferenceAttribute = function(t) {
-  return attr =>
-    t.isJSXIdentifier(attr.name, { name: "style" }) &&
-    t.isJSXExpressionContainer(attr.value) &&
-    t.isMemberExpression(attr.value.expression) &&
-    t.isIdentifier(attr.value.expression.object, {
-      name: "styles"
-    }) &&
-    t.isIdentifier(attr.value.expression.property);
+const isStylesMemberReference = (t, expression) =>
+  t.isMemberExpression(expression) &&
+  t.isIdentifier(expression.object, {
+    name: "styles"
+  }) &&
+  t.isIdentifier(expression.property);
+
+// If the given attribute matches one of:
+//   style={styles.x}
+//   style={{...styles.x, whatever}}
+//   style={[styles.x, whatever]}
+const getAttrReferencedStyles = function(t) {
+  return styleAttr => {
+    if (
+      t.isJSXIdentifier(styleAttr.name, { name: "style" }) &&
+      t.isJSXExpressionContainer(styleAttr.value)
+    ) {
+    }
+
+    return null;
+  };
 };
 
 const astToJsonValue = (t, n) => {
@@ -34,8 +46,8 @@ const astToJsonValue = (t, n) => {
       let k = t.isIdentifier(prop.key)
         ? prop.key.name
         : t.isStringLiteral(prop.key)
-        ? prop.key.value
-        : generate(prop.key).code;
+          ? prop.key.value
+          : generate(prop.key).code;
       const v = astToJsonValue(t, prop.value);
       obj[k] = v;
     }
@@ -53,15 +65,15 @@ const astToJsonValue = (t, n) => {
 const checkForComplexStyles = (path, t, state) => {
   if (typeof state.keepRadium === "undefined") {
     state.keepRadium = false;
-    state.keepStyles = false;
+    state.keepAllStyles = false;
+    state.stylesToKeep = new Set();
     path.parentPath.traverse({
       Identifier(path) {
         if (
           path.isReferencedIdentifier() &&
           path.isIdentifier({ name: "styles" })
         ) {
-          state.keepStyles = true;
-          console.log("keepStyles", generate(path.parent).code);
+          state.stylesToKeep.add(path.node.name);
         }
       },
       JSXAttribute(path) {
@@ -84,6 +96,11 @@ const checkForComplexStyles = (path, t, state) => {
       }
     });
   }
+};
+let removeStyleAttribute = function(t, openingElement) {
+  openingElement.attributes = openingElement.attributes.filter(
+    attr => !t.isJSXIdentifier(attr.name, { name: "style" })
+  );
 };
 const plugin = ({ types: t }) => {
   return {
@@ -126,40 +143,120 @@ const plugin = ({ types: t }) => {
                 ) {
                   objPath.node = objPath.node.arguments[0];
                 }
+                if (
+                  !t.isObjectExpression(objPath.node) ||
+                  objPath.node.properties.some(p => !t.isObjectProperty(p))
+                ) {
+                  path.stop();
+                  return;
+                }
                 const stylesObjects = astToJsonValue(t, objPath.node);
                 const cssStrings = _.mapValues(stylesObjects, toCss);
                 traverse(path.parent, {
+                  MemberExpression(membPath) {
+                    if (
+                      membPath.get("object").isIdentifier({ name: "styles" })
+                    ) {
+                      if (membPath.get("property").isIdentifier()) {
+                        state.stylesToKeep.add(
+                          membPath.get("property").node.name
+                        );
+                      } else {
+                        state.keepAllStyles = true;
+                      }
+                    }
+                  },
                   JSXElement(path) {
-                    const styleAttr = path.node.openingElement.attributes.find(
-                      isStylesReferenceAttribute(t)
+                    const openingElement = path.node.openingElement;
+                    const styleAttr = openingElement.attributes.find(
+                      attr =>
+                        t.isJSXIdentifier(attr.name, { name: "style" }) &&
+                        t.isJSXExpressionContainer(attr.value)
                     );
                     if (!styleAttr) return;
-                    const eltName = path.node.openingElement.name;
+                    const styleValue = styleAttr.value.expression;
+                    let styleNames = null;
+                    if (isStylesMemberReference(t, styleValue)) {
+                      styleNames = [styleValue.property.name];
+                      removeStyleAttribute(t, openingElement);
+                    } else if (t.isObjectExpression(styleValue)) {
+                      // If the style starts with styles references we can pull those out
+                      const idx = styleValue.properties.findIndex(
+                        p =>
+                          !(
+                            t.isSpreadElement(p) &&
+                            isStylesMemberReference(t, p.argument)
+                          )
+                      );
+
+                      console.log(
+                        generate(styleValue).code,
+                        idx,
+                        styleValue.properties.map(p => [
+                          generate(p).code,
+                          t.isSpreadElement(p),
+                          isStylesMemberReference(t, p.argument)
+                        ])
+                      );
+                      if (idx < 0 || styleValue.properties.length === 0) {
+                        // In this case, the object is made entirely of spreads of styles elements
+                        styleNames = styleValue.properties.map(
+                          p => p.argument.property.name
+                        );
+                        removeStyleAttribute(t, openingElement);
+                      }
+                      if (idx > 0) {
+                        // Some properties are spreads of styles elements
+                        styleNames = styleValue.properties
+                          .slice(0, idx)
+                          .map(p => p.argument.property.name);
+                        styleValue.properties = styleValue.properties.slice(
+                          idx
+                        );
+                      }
+                    } else if (t.isArrayExpression(styleValue)) {
+                      const idx = styleValue.elements.findIndex(
+                        elt => !isStylesMemberReference(t, elt)
+                      );
+                      if (idx < 0 || styleValue.elements.length === 0) {
+                        // Array made entirely of styles elements
+                        styleNames = styleValue.elements.map(
+                          elt => elt.property.name
+                        );
+                        removeStyleAttribute(t, openingElement);
+                      }
+                      if (idx > 0) {
+                        styleNames = styleValue.elements
+                          .slice(0, idx)
+                          .map(elt => elt.property.name);
+                        styleValue.elements = styleValue.elements.slice(idx);
+                      }
+                    }
+                    if (!styleNames) return;
+                    const eltName = openingElement.name;
                     const isBasicElement =
                       t.isJSXIdentifier(eltName) && /^[a-z]/.test(eltName.name);
-                    const styleName = styleAttr.value.expression.property.name;
-                    let css = cssStrings[styleName];
-                    path.node.openingElement.attributes = path.node.openingElement.attributes.filter(
-                      a => !isStylesReferenceAttribute(t)(a)
-                    );
+                    const inlineStyle = styleNames
+                      .map(styleName => cssStrings[styleName])
+                      .join(";\n");
                     if (eltName.name === "ReactModal") {
-                      state.keepStyles = true;
+                      state.stylesToKeep.add(styleNames[0]);
                       return;
                     }
-                    if (!css) {
-                      if (!stylesObjects[styleName])
-                        console.warn(`Cannot resolve styles.${styleName}`);
-                      else console.warn(`styles.${styleName} is empty?`);
+                    if (!inlineStyle) {
+                      if (!stylesObjects[styleNames[0]])
+                        console.warn(`Cannot resolve styles.${styleNames}`);
+                      else console.warn(`styles.${styleNames} is empty?`);
                       return;
                     }
                     if (["button", "input"].includes(eltName.name)) {
-                      css = `&&& {\n${css}\n}`;
+                      inlineStyle = `&&& {\n${inlineStyle}\n}`;
                     }
                     let componentNamePrefix = eltName.name
                       .toLowerCase()
-                      .includes(styleName.toLowerCase())
+                      .includes(styleNames[0].toLowerCase())
                       ? "Styled"
-                      : _.upperFirst(styleName);
+                      : _.upperFirst(styleNames[0]);
                     let componentNameSuffix =
                       {
                         a: "Link",
@@ -190,9 +287,7 @@ const plugin = ({ types: t }) => {
                     )
                       ? componentNamePrefix
                       : [componentNamePrefix, componentNameSuffix].join("");
-                    path.node.openingElement.name = t.jsxIdentifier(
-                      componentName
-                    );
+                    openingElement.name = t.jsxIdentifier(componentName);
                     if (path.node.closingElement) {
                       path.node.closingElement.name = t.jsxIdentifier(
                         componentName
@@ -215,7 +310,7 @@ const plugin = ({ types: t }) => {
                             t.templateLiteral(
                               [
                                 t.templateElement(
-                                  { cooked: css, raw: css },
+                                  { cooked: inlineStyle, raw: inlineStyle },
                                   true
                                 )
                               ],
@@ -237,8 +332,18 @@ const plugin = ({ types: t }) => {
                       )
                     ]);
                   }
+                  if (!state.keepAllStyles) {
+                    objPath.node.properties = objPath.node.properties.filter(
+                      property =>
+                        !(
+                          t.isObjectProperty(property) &&
+                          t.isIdentifier(property.key) &&
+                          !state.stylesToKeep.has(property.key.name)
+                        )
+                    );
+                  }
                   path.insertAfter(Object.values(styledComponents));
-                  if (!state.keepStyles) {
+                  if (objPath.node.properties.length === 0) {
                     path.remove();
                   }
                 }
