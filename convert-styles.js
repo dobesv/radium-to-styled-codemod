@@ -188,16 +188,6 @@ const plugin = ({ types: t }) => {
                             isStylesMemberReference(t, p.argument)
                           )
                       );
-
-                      console.log(
-                        generate(styleValue).code,
-                        idx,
-                        styleValue.properties.map(p => [
-                          generate(p).code,
-                          t.isSpreadElement(p),
-                          isStylesMemberReference(t, p.argument)
-                        ])
-                      );
                       if (idx < 0 || styleValue.properties.length === 0) {
                         // In this case, the object is made entirely of spreads of styles elements
                         styleNames = styleValue.properties.map(
@@ -236,7 +226,7 @@ const plugin = ({ types: t }) => {
                     const eltName = openingElement.name;
                     const isBasicElement =
                       t.isJSXIdentifier(eltName) && /^[a-z]/.test(eltName.name);
-                    const inlineStyle = styleNames
+                    let inlineStyle = styleNames
                       .map(styleName => cssStrings[styleName])
                       .join(";\n");
                     if (eltName.name === "ReactModal") {
