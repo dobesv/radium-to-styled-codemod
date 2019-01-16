@@ -272,11 +272,18 @@ const plugin = ({ types: t }) => {
                           ""
                         )
                       );
-                    const componentName = componentNamePrefix.endsWith(
+                    let componentName = componentNamePrefix.endsWith(
                       componentNameSuffix
                     )
                       ? componentNamePrefix
                       : [componentNamePrefix, componentNameSuffix].join("");
+                    if (path.scope.hasBinding(componentName)) {
+                      let n = 2;
+                      while (path.scope.hasBinding(`${componentName}${n}`)) {
+                        n++;
+                      }
+                      componentName = `${componentName}${n}`;
+                    }
                     openingElement.name = t.jsxIdentifier(componentName);
                     if (path.node.closingElement) {
                       path.node.closingElement.name = t.jsxIdentifier(
