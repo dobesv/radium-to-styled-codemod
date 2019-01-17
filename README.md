@@ -8,7 +8,7 @@ to those styles in a `style` attribute of JSX elements, and emits a styled-compo
 Usage:
 
     # Convert one file
-    yarn codemod --printer prettier -p ./convert-styles.js '/full/path/to/src/file'
+    yarn convert '/full/path/to/src/file'
     # Convert many files
-    yarn codemod --printer prettier -p ./convert-styles.js '/full/path/to/src/**/*.[jt]sx'
+    yarn convert '/full/path/to/src/**/*.[jt]sx'
 
