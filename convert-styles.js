@@ -59,6 +59,18 @@ const astToJsonValue = (t, n) => {
   ) {
     return -n.argument.value;
   }
+  if (t.isTemplateLiteral(n)) {
+    const parts = [];
+    for (let i = 0; i < n.quasis.length; i++) {
+      parts.push(n.quasis[i].value.raw);
+      if (i < n.expressions.length) {
+        parts.push("${");
+        parts.push(generate(n.expressions[i]).code);
+        parts.push("}");
+      }
+    }
+    return parts.join("");
+  }
   return ["${", generate(n).code, "}"].join("");
 };
 
@@ -203,6 +215,13 @@ const plugin = ({ types: t }) => {
                         styleValue.properties = styleValue.properties.slice(
                           idx
                         );
+                        if (
+                          styleValue.properties.length === 1 &&
+                          t.isSpreadElement(styleValue.properties[0])
+                        ) {
+                          styleAttr.value.expression =
+                            styleValue.properties[0].argument;
+                        }
                       }
                     } else if (t.isArrayExpression(styleValue)) {
                       const idx = styleValue.elements.findIndex(
@@ -220,23 +239,36 @@ const plugin = ({ types: t }) => {
                           .slice(0, idx)
                           .map(elt => elt.property.name);
                         styleValue.elements = styleValue.elements.slice(idx);
+                        if (
+                          styleValue.elements.length === 1 &&
+                          (t.isObjectExpression(styleValue.elements[0]) ||
+                            t.isMemberExpression(styleValue.elements[0]) ||
+                            t.isIdentifier(styleValue.elements[0]))
+                        ) {
+                          styleAttr.value.expression = styleValue.elements[0];
+                        }
                       }
                     }
                     if (!styleNames) return;
+                    const joinedStyleNames = styleNames
+                      .map(_.upperFirst)
+                      .join("");
                     const eltName = openingElement.name;
                     const isBasicElement =
                       t.isJSXIdentifier(eltName) && /^[a-z]/.test(eltName.name);
                     let inlineStyle = styleNames
                       .map(styleName => cssStrings[styleName])
-                      .join(";\n");
+                      .join(";");
                     if (eltName.name === "ReactModal") {
-                      state.stylesToKeep.add(styleNames[0]);
+                      for (const styleName of styleNames) {
+                        state.stylesToKeep.add(styleName);
+                      }
                       return;
                     }
                     if (!inlineStyle) {
                       if (!stylesObjects[styleNames[0]])
-                        console.warn(`Cannot resolve styles.${styleNames}`);
-                      else console.warn(`styles.${styleNames} is empty?`);
+                        console.warn(`Cannot resolve styles.${styleNames[0]}`);
+                      else console.warn(`styles.${styleNames[0]} is empty?`);
                       return;
                     }
                     if (["button", "input"].includes(eltName.name)) {
@@ -244,9 +276,9 @@ const plugin = ({ types: t }) => {
                     }
                     let componentNamePrefix = eltName.name
                       .toLowerCase()
-                      .includes(styleNames[0].toLowerCase())
+                      .includes(joinedStyleNames.toLowerCase())
                       ? "Styled"
-                      : _.upperFirst(styleNames[0]);
+                      : joinedStyleNames;
                     let componentNameSuffix =
                       {
                         a: "Link",
