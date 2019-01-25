@@ -39,15 +39,17 @@ const getAttrReferencedStyles = function(t) {
 };
 
 const astToJsonValue = (t, n) => {
-  if (t.isNumericLiteral(n) || t.isStringLiteral(n)) return n.value;
+  if (t.isNumericLiteral(n) || t.isStringLiteral(n) || t.isBooleanLiteral(n))
+    return n.value;
+  if (t.isNullLiteral(n)) return null;
   if (t.isObjectExpression(n)) {
     const obj = {};
     for (const prop of n.properties) {
       let k = t.isIdentifier(prop.key)
         ? prop.key.name
         : t.isStringLiteral(prop.key)
-          ? prop.key.value
-          : generate(prop.key).code;
+        ? prop.key.value
+        : generate(prop.key).code;
       const v = astToJsonValue(t, prop.value);
       obj[k] = v;
     }
