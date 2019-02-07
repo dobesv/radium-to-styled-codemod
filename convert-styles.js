@@ -1,6 +1,4 @@
 import generate from "@babel/generator";
-import traverse from "@babel/traverse";
-import { parse } from "json5";
 import postcss from "postcss";
 import postcssJs from "postcss-js";
 import _ from "lodash";
@@ -348,6 +346,7 @@ const plugin = ({ types: t }) => {
           if (path.parentPath.parentPath.node.closingElement) {
             path.parentPath.parentPath.node.closingElement.name = t.jsxIdentifier(componentName);
           }
+          path.remove();
         }
       },
       MemberExpression(membPath, state) {
