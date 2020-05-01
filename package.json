@@ -3,11 +3,11 @@
     "convert": "codemod --printer prettier -p ./convert-styles.js"
   },
   "dependencies": {
-    "@babel/cli": "7.2.3",
-    "@babel/core": "7.2.2",
-    "@babel/generator": "7.3.2",
-    "@babel/preset-typescript": "7.1.0",
-    "@babel/traverse": "7.2.3",
+    "@babel/cli": "7.8.4",
+    "@babel/core": "7.9.6",
+    "@babel/generator": "7.9.6",
+    "@babel/preset-typescript": "7.9.0",
+    "@babel/traverse": "7.9.6",
     "@codemod/cli": "2.1.5",
     "babel-types": "6.26.0",
     "json5": "2.1.0",
