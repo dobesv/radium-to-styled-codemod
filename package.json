@@ -12,7 +12,7 @@
     "babel-types": "6.26.0",
     "json5": "2.1.0",
     "lodash": "4.17.11",
-    "postcss": "7.0.14",
+    "postcss": "7.0.30",
     "postcss-js": "2.0.0",
     "prettier": "2.0.5",
     "typescript": "3.3.3"
