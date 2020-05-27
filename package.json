@@ -15,6 +15,6 @@
     "postcss": "7.0.30",
     "postcss-js": "2.0.0",
     "prettier": "2.0.5",
-    "typescript": "3.3.3"
+    "typescript": "3.9.3"
   }
 }
