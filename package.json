@@ -5,7 +5,7 @@
   "dependencies": {
     "@babel/cli": "7.10.3",
     "@babel/core": "7.10.3",
-    "@babel/generator": "7.10.3",
+    "@babel/generator": "7.11.0",
     "@babel/preset-typescript": "7.10.1",
     "@babel/traverse": "7.10.3",
     "@codemod/cli": "2.1.5",
