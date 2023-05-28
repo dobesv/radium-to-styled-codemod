@@ -14,7 +14,7 @@
     "lodash": "4.17.11",
     "postcss": "7.0.32",
     "postcss-js": "2.0.3",
-    "prettier": "2.0.5",
+    "prettier": "2.8.8",
     "typescript": "3.9.7"
   }
 }
